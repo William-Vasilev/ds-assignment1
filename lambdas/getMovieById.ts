@@ -2,7 +2,7 @@
 import { APIGatewayProxyHandlerV2 } from "aws-lambda";
 
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
-import { DynamoDBDocumentClient, GetCommand } from "@aws-sdk/lib-dynamodb";
+import { DynamoDBDocumentClient, GetCommand, QueryCommand, QueryCommandInput } from "@aws-sdk/lib-dynamodb";
 
 const ddbDocClient = createDDbDocClient();
 
@@ -13,6 +13,7 @@ export const handler: APIGatewayProxyHandlerV2 = async (event, context) => { // 
     // const movieId = parameters ? parseInt(parameters.movieId) : undefined;
     const parameters  = event?.pathParameters;
     const movieId = parameters?.movieId ? parseInt(parameters.movieId) : undefined;
+    const includeCast = event?.queryStringParameters?.cast === "true";
 
     if (!movieId) {
       return {
@@ -44,6 +45,25 @@ export const handler: APIGatewayProxyHandlerV2 = async (event, context) => { // 
       data: commandOutput.Item,
     };
 
+    if (includeCast) {
+      const castCommandOutput = await fetchCastData(movieId);
+      body.data.includeCast = castCommandOutput.Items;
+    }
+    
+    // Helper function to fetch cast data
+    async function fetchCastData(movieId: number) {
+      const commandInput: QueryCommandInput = {
+        TableName: "MovieCast",
+        KeyConditionExpression: "movieId = :movieId",
+        ExpressionAttributeValues: {
+          ":movieId": movieId,
+        },
+      };
+    
+      return await ddbDocClient.send(new QueryCommand(commandInput));
+    }
+
+    
     // Return Response
     return {
       statusCode: 200,
