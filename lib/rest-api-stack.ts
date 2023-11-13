@@ -8,6 +8,7 @@ import { Construct } from "constructs";
 import { generateBatch } from "../shared/util";
 import { movies, movieCasts } from "../seed/movies";
 import * as apig from "aws-cdk-lib/aws-apigateway";
+import { NodejsFunction } from "aws-cdk-lib/aws-lambda-nodejs";
 
 
 
@@ -34,6 +35,13 @@ export class RestAPIStack extends cdk.Stack {
     movieCastsTable.addLocalSecondaryIndex({
       indexName: "roleIx",
       sortKey: { name: "roleName", type: dynamodb.AttributeType.STRING },
+    });
+
+    const reviewsTable = new dynamodb.Table(this, "ReviewsTable", {
+      billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
+      partitionKey: { name: "movieId", type: dynamodb.AttributeType.NUMBER },
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+      tableName: "Reviews",
     });
 
     
@@ -126,6 +134,18 @@ export class RestAPIStack extends cdk.Stack {
           }
         );
 
+       
+        const addReviewFn = new lambdanode.NodejsFunction(this, "AddReviewFn", {
+          architecture: lambda.Architecture.ARM_64,
+          runtime: lambda.Runtime.NODEJS_16_X,
+          entry: `${__dirname}/../lambdas/addMovieReview.ts`,
+          timeout: cdk.Duration.seconds(10),
+          memorySize: 128,
+          environment: {
+            REVIEWS_TABLE_NAME: reviewsTable.tableName, 
+          },
+        });
+
         
         
         
@@ -136,6 +156,7 @@ export class RestAPIStack extends cdk.Stack {
         moviesTable.grantReadWriteData(deleteMovieFn);
         movieCastsTable.grantReadData(getMovieCastMembersFn);
         movieCastsTable.grantReadData(getMovieByIdFn);
+        reviewsTable.grantReadWriteData(addReviewFn);
 
 
 
@@ -180,6 +201,12 @@ export class RestAPIStack extends cdk.Stack {
     movieCastEndpoint.addMethod(
       "GET",
       new apig.LambdaIntegration(getMovieCastMembersFn, { proxy: true })
+    );
+
+    const reviewsEndpoint = moviesEndpoint.addResource("reviews");
+    reviewsEndpoint.addMethod(
+      "POST",
+      new apig.LambdaIntegration(addReviewFn, { proxy: true })
     );
         
         
