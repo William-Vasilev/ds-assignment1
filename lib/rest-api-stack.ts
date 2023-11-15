@@ -3,6 +3,7 @@ import * as lambdanode from "aws-cdk-lib/aws-lambda-nodejs";
 import * as lambda from "aws-cdk-lib/aws-lambda";
 import * as dynamodb from "aws-cdk-lib/aws-dynamodb";
 import * as custom from "aws-cdk-lib/custom-resources";
+import { GetCommand } from "@aws-sdk/lib-dynamodb";
 import { Construct } from "constructs";
 // import * as sqs from 'aws-cdk-lib/aws-sqs';
 import { generateBatch } from "../shared/util";
@@ -146,6 +147,19 @@ export class RestAPIStack extends cdk.Stack {
           },
         });
 
+        const getMovieReviewsFn = new lambdanode.NodejsFunction(
+          this,
+          "GetMovieReviewsFn", {
+          architecture: lambda.Architecture.ARM_64,
+          runtime: lambda.Runtime.NODEJS_16_X,
+          entry: `${__dirname}/../lambdas/getMovieReviews.ts`,
+          timeout: cdk.Duration.seconds(10),
+          memorySize: 128,
+          environment: {
+            REVIEWS_TABLE_NAME: reviewsTable.tableName,
+          },
+        });
+
         
         
         
@@ -157,6 +171,7 @@ export class RestAPIStack extends cdk.Stack {
         movieCastsTable.grantReadData(getMovieCastMembersFn);
         movieCastsTable.grantReadData(getMovieByIdFn);
         reviewsTable.grantReadWriteData(addReviewFn);
+        reviewsTable.grantReadData(getMovieReviewsFn);
 
 
 
@@ -208,6 +223,12 @@ export class RestAPIStack extends cdk.Stack {
       "POST",
       new apig.LambdaIntegration(addReviewFn, { proxy: true })
     );
+
+    const movieReviewsEndpoint = movieEndpoint.addResource("reviews");
+movieReviewsEndpoint.addMethod(
+  "GET",
+  new apig.LambdaIntegration(getMovieReviewsFn, { proxy: true })
+);
         
         
       }
