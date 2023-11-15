@@ -41,7 +41,7 @@ export class RestAPIStack extends cdk.Stack {
     const reviewsTable = new dynamodb.Table(this, "ReviewsTable", {
       billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
       partitionKey: { name: "movieId", type: dynamodb.AttributeType.NUMBER },
-      sortKey: { name: 'ReviewerName', type: dynamodb.AttributeType.STRING },
+      sortKey: { name: 'reviewerName', type: dynamodb.AttributeType.STRING },
       removalPolicy: cdk.RemovalPolicy.DESTROY,
       tableName: "Reviews",
     });
@@ -161,11 +161,21 @@ export class RestAPIStack extends cdk.Stack {
           },
         });
 
+        const getMovieReviewsByReviewerFn = new lambdanode.NodejsFunction(
+          this,
+          "GetMovieReviewsByReviewerFn", {
+          architecture: lambda.Architecture.ARM_64,
+          runtime: lambda.Runtime.NODEJS_16_X,
+          entry: `${__dirname}/../lambdas/getMovieReviewsByReviewer.ts`,
+          timeout: cdk.Duration.seconds(10),
+          memorySize: 128,
+          environment: {
+            REVIEWS_TABLE_NAME: reviewsTable.tableName,
+          },
+        });
         
         
         
-
-    
         
         
         // Permissions 
@@ -177,7 +187,7 @@ export class RestAPIStack extends cdk.Stack {
         movieCastsTable.grantReadData(getMovieByIdFn);
         reviewsTable.grantReadWriteData(addReviewFn);
         reviewsTable.grantReadData(getMovieReviewsFn);
-
+        reviewsTable.grantReadData(getMovieReviewsByReviewerFn);
 
 
         //Rest API
@@ -235,8 +245,13 @@ movieReviewsEndpoint.addMethod(
   new apig.LambdaIntegration(getMovieReviewsFn, { proxy: true })
 );
 
+const movieReviewsByReviewerEndpoint = movieEndpoint.addResource("reviewerReviews");
+        movieReviewsByReviewerEndpoint.addResource("{reviewerName}").addMethod(
+          "GET",
+          new apig.LambdaIntegration(getMovieReviewsByReviewerFn, { proxy: true })
+        );
         
         
-      }
+       }
     }
     
