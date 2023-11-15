@@ -6,9 +6,12 @@ const ddbDocClient = createDDbDocClient();
 
 export const handler: APIGatewayProxyHandlerV2 = async (event, context) => {
   try {
+    
     const parameters = event?.pathParameters;
     const movieId = parameters?.movieId ? parseInt(parameters.movieId) : undefined;
+    const minRating = event?.queryStringParameters?.minRating ? parseFloat(event.queryStringParameters.minRating) : undefined;
 
+    
     if (!movieId) {
       return {
         statusCode: 400,
@@ -19,14 +22,22 @@ export const handler: APIGatewayProxyHandlerV2 = async (event, context) => {
       };
     }
 
+    const queryInput: any = {
+      TableName: process.env.REVIEWS_TABLE_NAME,
+      KeyConditionExpression: "movieId = :movieId",
+      ExpressionAttributeValues: {
+        ":movieId": movieId,
+      },
+    };
+
+    // Check if minRating is provided, then add filter condition
+    if (minRating !== undefined) {
+      queryInput.FilterExpression = "rating > :minRating";
+      queryInput.ExpressionAttributeValues[":minRating"] = minRating;
+    }
+
     const commandOutput = await ddbDocClient.send(
-      new QueryCommand({
-        TableName: process.env.REVIEWS_TABLE_NAME,
-        KeyConditionExpression: "movieId = :movieId",
-        ExpressionAttributeValues: {
-          ":movieId": movieId,
-        },
-      })
+      new QueryCommand(queryInput)
     );
 
     return {
@@ -48,16 +59,17 @@ export const handler: APIGatewayProxyHandlerV2 = async (event, context) => {
   }
 };
 
+
 function createDDbDocClient() {
-    const ddbClient = new DynamoDBClient({ region: process.env.REGION });
-    const marshallOptions = {
-      convertEmptyValues: true,
-      removeUndefinedValues: true,
-      convertClassInstanceToMap: true,
-    };
-    const unmarshallOptions = {
-      wrapNumbers: false,
-    };
-    const translateConfig = { marshallOptions, unmarshallOptions };
-    return DynamoDBDocumentClient.from(ddbClient, translateConfig);
+  const ddbClient = new DynamoDBClient({ region: process.env.REGION });
+  const marshallOptions = {
+    convertEmptyValues: true,
+    removeUndefinedValues: true,
+    convertClassInstanceToMap: true,
+  };
+  const unmarshallOptions = {
+    wrapNumbers: false,
+  };
+  const translateConfig = { marshallOptions, unmarshallOptions };
+  return DynamoDBDocumentClient.from(ddbClient, translateConfig);
 }

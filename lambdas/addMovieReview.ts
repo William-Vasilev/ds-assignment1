@@ -1,32 +1,46 @@
 import { APIGatewayProxyHandlerV2 } from "aws-lambda";
-import { DynamoDBDocumentClient, PutCommand } from "@aws-sdk/lib-dynamodb";
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
+import { DynamoDBDocumentClient, PutCommand } from "@aws-sdk/lib-dynamodb";
+import Ajv from "ajv";
+import schema from "../shared/types.schema.json";
+
+const ajv = new Ajv();
+const isValidBodyParams = ajv.compile(schema.definitions["MovieReview"] || {});
 
 const ddbDocClient = createDDbDocClient();
 
 export const handler: APIGatewayProxyHandlerV2 = async (event, context) => {
   try {
+    // Print Event
+    console.log("Event: ", event);
     const body = event.body ? JSON.parse(event.body) : undefined;
-    if (!body || !body.movieId || !body.ReviewerName || !body.ReviewDate || !body.rating || !body.content) {
+    if (!body) {
       return {
-        statusCode: 400,
+        statusCode: 500,
         headers: {
           "content-type": "application/json",
         },
-        body: JSON.stringify({ message: "Invalid request body" }),
+        body: JSON.stringify({ message: "Missing request body" }),
+      };
+    }
+    // NEW
+    if (!isValidBodyParams(body)) {
+      return {
+        statusCode: 500,
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          message: `Incorrect type. Must match MovieReview schema`,
+          schema: schema.definitions["MovieReview"],
+        }),
       };
     }
 
-    await ddbDocClient.send(
+    const commandOutput = await ddbDocClient.send(
       new PutCommand({
         TableName: process.env.REVIEWS_TABLE_NAME,
-        Item: {
-          movieId: body.movieId,
-          ReviewerName: body.ReviewerName,
-          ReviewDate: body.ReviewDate,
-          rating: body.rating,
-          content: body.content,
-        },
+        Item: body,
       })
     );
 
@@ -35,7 +49,7 @@ export const handler: APIGatewayProxyHandlerV2 = async (event, context) => {
       headers: {
         "content-type": "application/json",
       },
-      body: JSON.stringify({ message: "Review added successfully" }),
+      body: JSON.stringify({ message: "Review added" }),
     };
   } catch (error: any) {
     console.log(JSON.stringify(error));
