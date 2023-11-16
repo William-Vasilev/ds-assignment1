@@ -173,6 +173,17 @@ export class RestAPIStack extends cdk.Stack {
             REVIEWS_TABLE_NAME: reviewsTable.tableName,
           },
         });
+
+        const updateReviewFn = new lambdanode.NodejsFunction(this, "UpdateReviewFn", {
+          architecture: lambda.Architecture.ARM_64,
+          runtime: lambda.Runtime.NODEJS_16_X,
+          entry: `${__dirname}/../lambdas/updateMovieReview.ts`, 
+          timeout: cdk.Duration.seconds(10),
+          memorySize: 128,
+          environment: {
+            REVIEWS_TABLE_NAME: reviewsTable.tableName,
+          },
+        });
         
         
         
@@ -188,6 +199,7 @@ export class RestAPIStack extends cdk.Stack {
         reviewsTable.grantReadWriteData(addReviewFn);
         reviewsTable.grantReadData(getMovieReviewsFn);
         reviewsTable.grantReadData(getMovieReviewsByReviewerFn);
+        reviewsTable.grantReadWriteData(updateReviewFn);
 
 
         //Rest API
@@ -233,22 +245,35 @@ export class RestAPIStack extends cdk.Stack {
       new apig.LambdaIntegration(getMovieCastMembersFn, { proxy: true })
     );
 
-    const reviewsEndpoint = moviesEndpoint.addResource("reviews");
-    reviewsEndpoint.addMethod(
-      "POST",
-      new apig.LambdaIntegration(addReviewFn, { proxy: true })
-    );
+//////////////////////////////REVIEW ENDPOINTS////////////////////////////////////
 
-    const movieReviewsEndpoint = movieEndpoint.addResource("reviews");
-movieReviewsEndpoint.addMethod(
-  "GET",
-  new apig.LambdaIntegration(getMovieReviewsFn, { proxy: true })
+const reviewsEndpoint = moviesEndpoint.addResource("reviews");
+const movieReviewsEndpoint = movieEndpoint.addResource("reviews");
+const reviewEndpoint = movieReviewsEndpoint.addResource("{reviewerName}");
+
+
+reviewsEndpoint.addMethod(
+  "POST",
+  new apig.LambdaIntegration(addReviewFn, { proxy: true })
 );
+    
+        
 
-const movieReviewsByReviewerEndpoint = movieEndpoint.addResource("reviewerReviews");
-        movieReviewsByReviewerEndpoint.addResource("{reviewerName}").addMethod(
+movieReviewsEndpoint.addMethod(
+          "GET",
+          new apig.LambdaIntegration(getMovieReviewsFn, { proxy: true })
+        );
+
+
+
+        reviewEndpoint.addMethod(
           "GET",
           new apig.LambdaIntegration(getMovieReviewsByReviewerFn, { proxy: true })
+        );
+
+        reviewEndpoint.addMethod(
+          "PUT",
+          new apig.LambdaIntegration(updateReviewFn, { proxy: true })
         );
         
         
