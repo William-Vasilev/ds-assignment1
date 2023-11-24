@@ -184,9 +184,22 @@ export class RestAPIStack extends cdk.Stack {
             REVIEWS_TABLE_NAME: reviewsTable.tableName,
           },
         });
+
         
+        const getMovieReviewsByYearFn = new lambdanode.NodejsFunction(
+          this,
+          "GetMovieReviewsByYearFn", {
+          architecture: lambda.Architecture.ARM_64,
+          runtime: lambda.Runtime.NODEJS_16_X,
+          entry: `${__dirname}/../lambdas/getMovieReviewsByYear.ts`, // Create a new file for this Lambda function
+          timeout: cdk.Duration.seconds(10),
+          memorySize: 128,
+          environment: {
+            REVIEWS_TABLE_NAME: reviewsTable.tableName,
+          },
+        });
         
-        
+       
         
         
         // Permissions 
@@ -200,6 +213,8 @@ export class RestAPIStack extends cdk.Stack {
         reviewsTable.grantReadData(getMovieReviewsFn);
         reviewsTable.grantReadData(getMovieReviewsByReviewerFn);
         reviewsTable.grantReadWriteData(updateReviewFn);
+        reviewsTable.grantReadData(getMovieReviewsByYearFn);
+        
 
 
         //Rest API
@@ -250,6 +265,11 @@ export class RestAPIStack extends cdk.Stack {
 const reviewsEndpoint = moviesEndpoint.addResource("reviews");
 const movieReviewsEndpoint = movieEndpoint.addResource("reviews");
 const reviewEndpoint = movieReviewsEndpoint.addResource("{reviewerName}");
+const test = movieEndpoint.addResource("reviewsByYear");
+const movieReviewsByYearEndpoint = test.addResource("{year}");
+
+
+
 
 
 reviewsEndpoint.addMethod(
@@ -277,6 +297,11 @@ movieReviewsEndpoint.addMethod(
         );
         
         
+        movieReviewsByYearEndpoint.addMethod(
+          "GET",
+          new apig.LambdaIntegration(getMovieReviewsByYearFn, { proxy: true })
+        );
+       
        }
     }
     
