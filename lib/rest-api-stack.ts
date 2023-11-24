@@ -199,7 +199,18 @@ export class RestAPIStack extends cdk.Stack {
           },
         });
         
-       
+        const getMovieReviewsByReviewerNameFn = new lambdanode.NodejsFunction(
+          this,
+          "GetMovieReviewsByReviewerNameFn", {
+          architecture: lambda.Architecture.ARM_64,
+          runtime: lambda.Runtime.NODEJS_16_X,
+          entry: `${__dirname}/../lambdas/getMovieReviewsByReviewerName.ts`,
+          timeout: cdk.Duration.seconds(10),
+          memorySize: 128,
+          environment: {
+            REVIEWS_TABLE_NAME: reviewsTable.tableName,
+          },
+        });
         
         
         // Permissions 
@@ -214,7 +225,7 @@ export class RestAPIStack extends cdk.Stack {
         reviewsTable.grantReadData(getMovieReviewsByReviewerFn);
         reviewsTable.grantReadWriteData(updateReviewFn);
         reviewsTable.grantReadData(getMovieReviewsByYearFn);
-        
+        reviewsTable.grantReadData(getMovieReviewsByReviewerNameFn);
 
 
         //Rest API
@@ -265,8 +276,12 @@ export class RestAPIStack extends cdk.Stack {
 const reviewsEndpoint = moviesEndpoint.addResource("reviews");
 const movieReviewsEndpoint = movieEndpoint.addResource("reviews");
 const reviewEndpoint = movieReviewsEndpoint.addResource("{reviewerName}");
-const test = movieEndpoint.addResource("reviewsByYear");
-const movieReviewsByYearEndpoint = test.addResource("{year}");
+
+const allReviewsByReviewerEndpoint = moviesEndpoint.addResource("reviewsByReviewer")
+const reviewEndpointReviwerName = allReviewsByReviewerEndpoint.addResource("{reviewerName}");
+
+const reviewsByYear = movieEndpoint.addResource("reviewsByYear");
+const movieReviewsByYearEndpoint = reviewsByYear.addResource("{year}");
 
 
 
@@ -289,6 +304,11 @@ movieReviewsEndpoint.addMethod(
         reviewEndpoint.addMethod(
           "GET",
           new apig.LambdaIntegration(getMovieReviewsByReviewerFn, { proxy: true })
+        );
+
+        reviewEndpointReviwerName.addMethod(
+          "GET",
+          new apig.LambdaIntegration(getMovieReviewsByReviewerNameFn, { proxy: true })
         );
 
         reviewEndpoint.addMethod(
