@@ -10,6 +10,7 @@ import { movies, movieCasts } from "../seed/movies";
 import * as apig from "aws-cdk-lib/aws-apigateway";
 import { NodejsFunction } from "aws-cdk-lib/aws-lambda-nodejs";
 import * as node from "aws-cdk-lib/aws-lambda-nodejs";
+import * as iam from "aws-cdk-lib/aws-iam"
 
 
 type AppApiProps = {
@@ -117,6 +118,27 @@ export class RestAPIStack extends cdk.Stack {
           },
         });
 
+        const getTranslationFn = new lambdanode.NodejsFunction(
+          this,
+          "GetTranslationFn",
+          {
+            architecture: lambda.Architecture.ARM_64,
+            runtime: lambda.Runtime.NODEJS_16_X,
+            entry: `${__dirname}/../lambdas/translate.ts`,
+            timeout: cdk.Duration.seconds(10),
+            memorySize: 128,
+            environment: {
+              TABLE_NAME: reviewsTable.tableName
+            },
+          });
+
+        const translatePolicyStatement = new iam.PolicyStatement({
+          actions: ["translate:TranslateText"],
+          resources: ["*"],
+        });
+        
+        getTranslationFn.addToRolePolicy(translatePolicyStatement)
+
         // const appCommonFnProps = {
         //   architecture: lambda.Architecture.ARM_64,
         //   timeout: cdk.Duration.seconds(10),
@@ -155,9 +177,9 @@ export class RestAPIStack extends cdk.Stack {
         reviewsTable.grantReadWriteData(updateReviewFn);
         reviewsTable.grantReadData(getMovieReviewsByYearFn);
         reviewsTable.grantReadData(getMovieReviewsByReviewerNameFn);
+        reviewsTable.grantReadWriteData(getTranslationFn)
 
-
-        //Rest API
+       // Rest API
         const api = new apig.RestApi(this, "RestAPI", {
           description: "demo api",
           deployOptions: {
@@ -181,7 +203,7 @@ export class RestAPIStack extends cdk.Stack {
         //   },
         // });
     
-        //
+        
         // const protectedRes = appApi.root.addResource("protected");
     
         // const publicRes = appApi.root.addResource("public");
@@ -197,12 +219,7 @@ export class RestAPIStack extends cdk.Stack {
         // });
         
     
-        const moviesEndpoint = api.root.addResource("movies");
-    //     moviesEndpoint.addMethod(
-    //       "GET",
-    //       new apig.LambdaIntegration(getAllMoviesFn, { proxy: true })
-    //     );
-    
+        const moviesEndpoint = api.root.addResource("movies")
         const movieEndpoint = moviesEndpoint.addResource("{movieId}");
     
 
@@ -218,8 +235,7 @@ const reviewEndpointReviwerName = allReviewsByReviewerEndpoint.addResource("{rev
 const reviewsByYear = movieEndpoint.addResource("reviewsByYear");
 const movieReviewsByYearEndpoint = reviewsByYear.addResource("{year}");
 
-
-
+const translateReviewEndpoint = reviewEndpoint.addResource("translation");
 
 
 reviewsEndpoint.addMethod(
@@ -257,6 +273,10 @@ movieReviewsEndpoint.addMethod(
           new apig.LambdaIntegration(getMovieReviewsByYearFn, { proxy: true })
         );
        
+        translateReviewEndpoint.addMethod(
+          "GET",
+          new apig.LambdaIntegration(getTranslationFn, { proxy: true })
+        )
 
         // protectedRes.addMethod("GET", new apig.LambdaIntegration(protectedFn), {
         //   authorizer: requestAuthorizer,
